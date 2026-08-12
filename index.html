@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>Load Log — Hours Tracker</title>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#15171A">
+<meta name="description" content="Track hours and activity through the day, with weekly/monthly role tracking and Excel export.">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Load Log">
+<meta name="mobile-web-app-capable" content="yes">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#15171A;
+    --panel:#1F2226;
+    --panel-raised:#262A2F;
+    --chalk:#EDEAE2;
+    --chalk-dim:#A9A69E;
+    --steel:#7C8794;
+    --amber:#D98E3F;
+    --amber-dim:#5C4626;
+    --red:#E1553B;
+    --line: rgba(237,234,226,0.09);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--ink);
+    color:var(--chalk);
+    font-family:'Inter',sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+  }
+  .app{
+    max-width:640px;
+    margin:0 auto;
+    padding:20px 16px 80px;
+  }
+  header{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    padding:6px 2px 22px;
+    border-bottom:1px solid var(--line);
+    margin-bottom:20px;
+  }
+  .brand{
+    font-family:'Bebas Neue',sans-serif;
+    font-size:34px;
+    letter-spacing:1px;
+    color:var(--chalk);
+    line-height:1;
+  }
+  .brand span{color:var(--amber);}
+  .brand-sub{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--steel);
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    margin-top:4px;
+  }
+  .export-btn{
+    background:var(--amber);
+    color:var(--ink);
+    border:none;
+    font-family:'IBM Plex Mono',monospace;
+    font-weight:600;
+    font-size:12.5px;
+    letter-spacing:0.03em;
+    padding:11px 14px;
+    border-radius:8px;
+    cursor:pointer;
+    white-space:nowrap;
+    transition:transform .1s ease, background .15s ease;
+  }
+  .export-btn:active{transform:scale(0.96);}
+  .export-btn:hover{background:#E4A159;}
+  .export-btn:disabled{background:var(--panel-raised);color:var(--steel);cursor:not-allowed;}
+
+  .card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:18px;
+    margin-bottom:16px;
+  }
+
+  /* date bar */
+  .date-row{display:flex;align-items:center;gap:10px;}
+  .date-row label{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--steel);
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    white-space:nowrap;
+  }
+  input[type="date"]{
+    flex:1;
+    background:var(--panel-raised);
+    border:1px solid var(--line);
+    color:var(--chalk);
+    font-family:'IBM Plex Mono',monospace;
+    font-size:14px;
+    padding:10px 12px;
+    border-radius:8px;
+    outline:none;
+    color-scheme:dark;
+  }
+  .today-btn{
+    background:transparent;
+    border:1px solid var(--steel);
+    color:var(--chalk-dim);
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11.5px;
+    padding:10px 12px;
+    border-radius:8px;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .today-btn:hover{border-color:var(--amber);color:var(--amber);}
+
+  /* tally */
+  .tally-top{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:14px;}
+  .tally-label{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--steel);text-transform:uppercase;letter-spacing:0.08em;}
+  .tally-number{font-family:'Bebas Neue',sans-serif;font-size:44px;line-height:1;color:var(--chalk);}
+  .tally-number span{font-size:18px;color:var(--steel);font-family:'IBM Plex Mono',monospace;margin-left:4px;}
+
+  .plate-track{
+    display:flex;
+    gap:3px;
+    height:22px;
+    background:var(--panel-raised);
+    border-radius:5px;
+    overflow:hidden;
+    padding:3px;
+  }
+  .plate-seg{
+    flex:1;
+    background:var(--line);
+    border-radius:2px;
+    transition:background .2s ease;
+  }
+  .plate-seg.filled{background:var(--amber);}
+  .plate-seg.over{background:var(--red);}
+  .plate-scale{
+    display:flex;
+    justify-content:space-between;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;
+    color:var(--steel);
+    margin-top:6px;
+  }
+
+  .breakdown{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-top:14px;
+  }
+  .chip{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11.5px;
+    color:var(--chalk-dim);
+    background:var(--panel-raised);
+    border:1px solid var(--line);
+    padding:6px 10px;
+    border-radius:20px;
+  }
+  .chip b{color:var(--amber);font-weight:600;}
+
+  /* form */
+  .card h2{
+    font-family:'Bebas Neue',sans-serif;
+    font-size:20px;
+    letter-spacing:0.5px;
+    margin:0 0 14px;
+    color:var(--chalk);
+  }
+  .field-label{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--steel);
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    margin:0 0 8px;
+  }
+  .grid-4{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:8px;
+    margin-bottom:8px;
+  }
+  .tile{
+    background:var(--panel-raised);
+    border:1px solid var(--line);
+    color:var(--chalk-dim);
+    font-family:'Inter',sans-serif;
+    font-weight:600;
+    font-size:13.5px;
+    padding:13px 10px;
+    border-radius:9px;
+    cursor:pointer;
+    text-align:center;
+    transition:all .12s ease;
+  }
+  .tile:hover{border-color:var(--steel);}
+  .tile.active{
+    background:var(--amber-dim);
+    border-color:var(--amber);
+    color:var(--amber);
+  }
+  .other-input{
+    width:100%;
+    background:var(--panel-raised);
+    border:1px solid var(--line);
+    color:var(--chalk);
+    font-family:'Inter',sans-serif;
+    font-size:13.5px;
+    padding:11px 12px;
+    border-radius:9px;
+    outline:none;
+    margin-bottom:18px;
+    display:none;
+  }
+  .other-input:focus{border-color:var(--amber);}
+  .other-input.show{display:block;}
+
+  .time-grid{
+    display:grid;
+    grid-template-columns:repeat(4,1fr) 1.3fr;
+    gap:8px;
+    margin-bottom:18px;
+  }
+  .time-tile{
+    background:var(--panel-raised);
+    border:1px solid var(--line);
+    color:var(--chalk-dim);
+    font-family:'IBM Plex Mono',monospace;
+    font-weight:600;
+    font-size:13px;
+    padding:13px 4px;
+    border-radius:9px;
+    cursor:pointer;
+    text-align:center;
+    transition:all .12s ease;
+  }
+  .time-tile:hover{border-color:var(--steel);}
+  .time-tile.active{
+    background:var(--amber-dim);
+    border-color:var(--amber);
+    color:var(--amber);
+  }
+  .time-custom-wrap{position:relative;}
+  .time-custom-wrap input{
+    width:100%;
+    height:100%;
+    background:var(--panel-raised);
+    border:1px solid var(--line);
+    color:var(--chalk);
+    font-family:'IBM Plex Mono',monospace;
+    font-size:13px;
+    padding:13px 6px;
+    border-radius:9px;
+    outline:none;
+    text-align:center;
+  }
+  .time-custom-wrap input:focus{border-color:var(--amber);}
+  .time-custom-wrap input.active-custom{border-color:var(--amber);color:var(--amber);}
+
+  textarea{
+    width:100%;
+    background:var(--panel-raised);
+    border:1px solid var(--line);
+    color:var(--chalk);
+    font-family:'Inter',sans-serif;
+    font-size:13.5px;
+    padding:12px;
+    border-radius:9px;
+    outline:none;
+    resize:vertical;
+    min-height:64px;
+    margin-bottom:16px;
+  }
+  textarea:focus{border-color:var(--amber);}
+  textarea::placeholder{color:var(--steel);}
+
+  .add-btn{
+    width:100%;
+    background:var(--amber);
+    color:var(--ink);
+    border:none;
+    font-family:'Bebas Neue',sans-serif;
+    font-size:18px;
+    letter-spacing:0.5px;
+    padding:14px;
+    border-radius:9px;
+    cursor:pointer;
+    transition:transform .1s ease, background .15s ease;
+  }
+  .add-btn:hover{background:#E4A159;}
+  .add-btn:active{transform:scale(0.98);}
+  .add-btn:disabled{background:var(--panel-raised);color:var(--steel);cursor:not-allowed;}
+
+  .error-msg{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11.5px;
+    color:var(--red);
+    margin:-8px 0 14px;
+    display:none;
+  }
+  .error-msg.show{display:block;}
+
+  /* log */
+  .log-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:12px;
+  }
+  .log-header h2{
+    font-family:'Bebas Neue',sans-serif;
+    font-size:20px;
+    letter-spacing:0.5px;
+    margin:0;
+  }
+  .log-count{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--steel);
+  }
+  .day-group{margin-bottom:18px;}
+  .day-heading{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11.5px;
+    color:var(--steel);
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    padding:0 2px 8px;
+    display:flex;
+    justify-content:space-between;
+  }
+  .day-heading b{color:var(--amber);font-weight:600;}
+  .entry{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:11px;
+    padding:12px 14px;
+    display:flex;
+    align-items:flex-start;
+    gap:12px;
+    margin-bottom:8px;
+  }
+  .entry-time{
+    font-family:'IBM Plex Mono',monospace;
+    font-weight:600;
+    font-size:13px;
+    color:var(--amber);
+    background:var(--amber-dim);
+    border-radius:6px;
+    padding:5px 8px;
+    white-space:nowrap;
+    flex-shrink:0;
+  }
+  .entry-body{flex:1;min-width:0;}
+  .entry-cat{
+    font-family:'Inter',sans-serif;
+    font-weight:600;
+    font-size:13.5px;
+    color:var(--chalk);
+    margin-bottom:2px;
+  }
+  .entry-comment{
+    font-family:'Inter',sans-serif;
+    font-size:12.5px;
+    color:var(--chalk-dim);
+    line-height:1.4;
+    word-break:break-word;
+  }
+  .entry-del{
+    background:none;
+    border:none;
+    color:var(--steel);
+    font-size:16px;
+    cursor:pointer;
+    padding:2px 4px;
+    line-height:1;
+    flex-shrink:0;
+  }
+  .entry-del:hover{color:var(--red);}
+  .empty-state{
+    text-align:center;
+    padding:36px 16px;
+    color:var(--steel);
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12.5px;
+  }
+
+  .toast{
+    position:fixed;
+    bottom:24px;
+    left:50%;
+    transform:translateX(-50%) translateY(20px);
+    background:var(--panel-raised);
+    border:1px solid var(--amber);
+    color:var(--chalk);
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12.5px;
+    padding:11px 18px;
+    border-radius:8px;
+    opacity:0;
+    pointer-events:none;
+    transition:all .25s ease;
+    z-index:100;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  /* dashboard */
+  .dashboard-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:18px;
+  }
+  .metric-label{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--steel);
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    margin-bottom:6px;
+  }
+  .metric-value{
+    font-family:'Bebas Neue',sans-serif;
+    font-size:28px;
+    line-height:1;
+    color:var(--chalk);
+    margin-bottom:8px;
+  }
+  .metric-value span{
+    font-size:14px;
+    color:var(--steel);
+    font-family:'IBM Plex Mono',monospace;
+    margin-left:4px;
+  }
+  .metric-bar-track{
+    background:var(--panel-raised);
+    height:9px;
+    border-radius:5px;
+    overflow:hidden;
+    margin-bottom:6px;
+  }
+  .metric-bar-fill{
+    height:100%;
+    background:var(--amber);
+    border-radius:5px;
+    transition:width .3s ease;
+  }
+  .metric-bar-fill.over{background:var(--red);}
+  .metric-sub{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px;
+    color:var(--steel);
+  }
+  .dashboard-divider{
+    width:1px;
+    background:var(--line);
+    margin:0 4px;
+  }
+  .dashboard-history{
+    margin-top:16px;
+    padding-top:14px;
+    border-top:1px solid var(--line);
+  }
+  .history-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:8px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+  }
+  .history-row:last-child{margin-bottom:0;}
+  .history-row .hr-label{color:var(--chalk-dim);width:92px;flex-shrink:0;}
+  .history-row .hr-track{flex:1;background:var(--panel-raised);height:7px;border-radius:4px;overflow:hidden;}
+  .history-row .hr-fill{height:100%;background:var(--amber);border-radius:4px;}
+  .history-row .hr-fill.over{background:var(--red);}
+  .history-row .hr-val{color:var(--steel);width:52px;text-align:right;flex-shrink:0;}
+
+  /* entry actions */
+  .entry-actions{display:flex;gap:2px;flex-shrink:0;}
+  .entry-edit,.entry-del{
+    background:none;
+    border:none;
+    color:var(--steel);
+    font-size:14px;
+    cursor:pointer;
+    padding:4px 6px;
+    line-height:1;
+  }
+  .entry-edit:hover{color:var(--amber);}
+  .entry-del:hover{color:var(--red);}
+  .entry.editing{border-color:var(--amber);}
+
+  .form-actions{display:flex;gap:10px;}
+  .cancel-edit-btn{
+    display:none;
+    background:transparent;
+    border:1px solid var(--steel);
+    color:var(--chalk-dim);
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12.5px;
+    padding:0 16px;
+    border-radius:9px;
+    cursor:pointer;
+  }
+  .cancel-edit-btn.show{display:block;}
+  .cancel-edit-btn:hover{border-color:var(--red);color:var(--red);}
+  .editing-banner{
+    display:none;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--amber);
+    background:var(--amber-dim);
+    padding:8px 10px;
+    border-radius:7px;
+    margin-bottom:14px;
+  }
+  .editing-banner.show{display:block;}
+
+  @media (max-width:400px){
+    .time-grid{grid-template-columns:repeat(4,1fr);grid-template-rows:auto auto;}
+    .time-custom-wrap{grid-column:1 / -1;}
+    .dashboard-grid{grid-template-columns:1fr;gap:16px;}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div>
+      <div class="brand">LOAD<span>LOG</span></div>
+      <div class="brand-sub">Hours &amp; activity tracker</div>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="today-btn" id="installBtn" style="display:none;">Install app</button>
+      <button class="export-btn" id="exportBtn">Export .xlsx</button>
+    </div>
+  </header>
+
+  <div class="card date-row">
+    <label for="dateInput">Logging&nbsp;for</label>
+    <input type="date" id="dateInput">
+    <button class="today-btn" id="todayBtn">Today</button>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-bottom:16px;">Role tracking</h2>
+    <div class="dashboard-grid">
+      <div>
+        <div class="metric-label">This week</div>
+        <div class="metric-value" id="weekMetric">0.0<span>/ 16h</span></div>
+        <div class="metric-bar-track"><div class="metric-bar-fill" id="weekBar" style="width:0%"></div></div>
+        <div class="metric-sub" id="weekSub">Mon–Sun</div>
+      </div>
+      <div>
+        <div class="metric-label">This month</div>
+        <div class="metric-value" id="monthMetric">0.0<span>/ 69.3h</span></div>
+        <div class="metric-bar-track"><div class="metric-bar-fill" id="monthBar" style="width:0%"></div></div>
+        <div class="metric-sub" id="monthSub">0.4 FTE target</div>
+      </div>
+    </div>
+    <div class="dashboard-history" id="dashboardHistory"></div>
+  </div>
+
+  <div class="card">
+    <div class="tally-top">
+      <div>
+        <div class="tally-label" id="tallyDateLabel">Today</div>
+        <div class="tally-number" id="tallyNumber">0.0<span>hrs logged</span></div>
+      </div>
+    </div>
+    <div class="plate-track" id="plateTrack"></div>
+    <div class="plate-scale"><span>0</span><span>4h</span><span>8h</span></div>
+    <div class="breakdown" id="breakdown"></div>
+  </div>
+
+  <div class="card">
+    <h2>Add entry</h2>
+    <div class="editing-banner" id="editingBanner">Editing an existing entry</div>
+
+    <div class="field-label">Category</div>
+    <div class="grid-4" id="categoryGrid"></div>
+    <input type="text" class="other-input" id="otherInput" placeholder="Describe activity...">
+
+    <div class="field-label">Time spent</div>
+    <div class="time-grid" id="timeGrid">
+      <div class="time-tile" data-time="0.25">0.25h</div>
+      <div class="time-tile" data-time="0.5">0.5h</div>
+      <div class="time-tile" data-time="0.75">0.75h</div>
+      <div class="time-tile" data-time="1">1h</div>
+      <div class="time-custom-wrap">
+        <input type="number" id="customTime" step="0.25" min="0" placeholder="Other">
+      </div>
+    </div>
+
+    <div class="field-label">Comment</div>
+    <textarea id="commentInput" placeholder="Optional note — client name, focus area, topic..."></textarea>
+
+    <div class="error-msg" id="errorMsg">Pick a category and a time before adding.</div>
+    <div class="form-actions">
+      <button class="add-btn" id="addBtn">Add to log</button>
+      <button class="cancel-edit-btn" id="cancelEditBtn">Cancel</button>
+    </div>
+  </div>
+
+  <div class="log-header">
+    <h2>Entries</h2>
+    <div class="log-count" id="logCount">0 total</div>
+  </div>
+  <div id="logList"></div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  const CATEGORIES = ['Gym Session','Programming','Communication','Meeting','Other'];
+  const STORAGE_KEY = 'loadlog-entries';
+  const DAILY_TARGET = 8; // hours, scale for the plate meter
+  const SEGMENTS = 16; // 0.5h per segment
+  const WEEKLY_TARGET = 16; // hours/week for the role
+  const MONTHLY_TARGET = Math.round((WEEKLY_TARGET * 52 / 12) * 10) / 10; // 0.4 FTE, ~69.3h/month
+
+  let entries = [];
+  let selectedCategory = null;
+  let selectedTime = null;
+  let customTimeActive = false;
+  let editingId = null;
+
+  const dateInput = document.getElementById('dateInput');
+  const todayBtn = document.getElementById('todayBtn');
+  const categoryGrid = document.getElementById('categoryGrid');
+  const otherInput = document.getElementById('otherInput');
+  const timeGrid = document.getElementById('timeGrid');
+  const customTime = document.getElementById('customTime');
+  const commentInput = document.getElementById('commentInput');
+  const addBtn = document.getElementById('addBtn');
+  const cancelEditBtn = document.getElementById('cancelEditBtn');
+  const editingBanner = document.getElementById('editingBanner');
+  const errorMsg = document.getElementById('errorMsg');
+  const logList = document.getElementById('logList');
+  const logCount = document.getElementById('logCount');
+  const exportBtn = document.getElementById('exportBtn');
+  const toast = document.getElementById('toast');
+  const tallyNumber = document.getElementById('tallyNumber');
+  const tallyDateLabel = document.getElementById('tallyDateLabel');
+  const plateTrack = document.getElementById('plateTrack');
+  const breakdown = document.getElementById('breakdown');
+  const weekMetric = document.getElementById('weekMetric');
+  const weekBar = document.getElementById('weekBar');
+  const weekSub = document.getElementById('weekSub');
+  const monthMetric = document.getElementById('monthMetric');
+  const monthBar = document.getElementById('monthBar');
+  const monthSub = document.getElementById('monthSub');
+  const dashboardHistory = document.getElementById('dashboardHistory');
+
+  function todayStr(){
+    const d = new Date();
+    const off = d.getTimezoneOffset();
+    return new Date(d.getTime() - off*60000).toISOString().slice(0,10);
+  }
+  function fmtDateHeading(str){
+    const d = new Date(str + 'T00:00:00');
+    return d.toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric', year:'numeric' });
+  }
+  // Monday-start week range containing the given date string
+  function weekRange(str){
+    const d = new Date(str + 'T00:00:00');
+    const dow = (d.getDay() + 6) % 7; // 0=Mon...6=Sun
+    const start = new Date(d); start.setDate(d.getDate() - dow);
+    const end = new Date(start); end.setDate(start.getDate() + 6);
+    return { start: toDateStr(start), end: toDateStr(end) };
+  }
+  function toDateStr(d){
+    const off = d.getTimezoneOffset();
+    return new Date(d.getTime() - off*60000).toISOString().slice(0,10);
+  }
+  function addDays(str, n){
+    const d = new Date(str + 'T00:00:00');
+    d.setDate(d.getDate() + n);
+    return toDateStr(d);
+  }
+  function fmtShort(str){
+    const d = new Date(str + 'T00:00:00');
+    return d.toLocaleDateString(undefined, { month:'short', day:'numeric' });
+  }
+  function monthKey(str){ return str.slice(0,7); }
+  function fmtMonth(key){
+    const d = new Date(key + '-01T00:00:00');
+    return d.toLocaleDateString(undefined, { month:'short', year:'numeric' });
+  }
+
+  dateInput.value = todayStr();
+
+  // --- render category tiles ---
+  CATEGORIES.forEach(cat => {
+    const tile = document.createElement('div');
+    tile.className = 'tile';
+    tile.textContent = cat;
+    tile.dataset.cat = cat;
+    tile.addEventListener('click', () => {
+      selectedCategory = cat;
+      [...categoryGrid.children].forEach(c => c.classList.remove('active'));
+      tile.classList.add('active');
+      if(cat === 'Other'){
+        otherInput.classList.add('show');
+      } else {
+        otherInput.classList.remove('show');
+        otherInput.value = '';
+      }
+    });
+    categoryGrid.appendChild(tile);
+  });
+
+  // --- time tiles ---
+  [...timeGrid.querySelectorAll('.time-tile')].forEach(tile => {
+    tile.addEventListener('click', () => {
+      selectedTime = parseFloat(tile.dataset.time);
+      customTimeActive = false;
+      customTime.value = '';
+      customTime.classList.remove('active-custom');
+      [...timeGrid.querySelectorAll('.time-tile')].forEach(t => t.classList.remove('active'));
+      tile.classList.add('active');
+    });
+  });
+  customTime.addEventListener('input', () => {
+    const v = parseFloat(customTime.value);
+    if(!isNaN(v) && v > 0){
+      selectedTime = v;
+      customTimeActive = true;
+      customTime.classList.add('active-custom');
+      [...timeGrid.querySelectorAll('.time-tile')].forEach(t => t.classList.remove('active'));
+    } else {
+      customTimeActive = false;
+      customTime.classList.remove('active-custom');
+    }
+  });
+
+  todayBtn.addEventListener('click', () => {
+    dateInput.value = todayStr();
+    renderTally();
+    renderLog();
+    renderDashboard();
+  });
+  dateInput.addEventListener('change', () => { renderTally(); });
+
+  function showToast(msg){
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2000);
+  }
+
+  // --- storage ---
+  // Uses localStorage: data lives only in this browser, on this device.
+  // Nothing is sent anywhere — not to GitHub, not to any server.
+  function loadEntries(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      entries = raw ? JSON.parse(raw) : [];
+    }catch(e){
+      entries = [];
+      showToast('Could not read saved data on this device');
+    }
+    renderTally();
+    renderLog();
+    renderDashboard();
+  }
+
+  function saveEntries(){
+    try{
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+    }catch(e){
+      showToast('Storage full or unavailable — entry may not be saved');
+    }
+  }
+
+  // --- add / save entry ---
+  addBtn.addEventListener('click', () => {
+    let category = selectedCategory;
+    if(category === 'Other' && otherInput.value.trim()){
+      category = otherInput.value.trim();
+    }
+    if(!category || !selectedTime || selectedTime <= 0){
+      errorMsg.classList.add('show');
+      return;
+    }
+    errorMsg.classList.remove('show');
+
+    if(editingId){
+      const idx = entries.findIndex(e => e.id === editingId);
+      if(idx !== -1){
+        entries[idx] = {
+          ...entries[idx],
+          date: dateInput.value || todayStr(),
+          category: category,
+          hours: selectedTime,
+          comment: commentInput.value.trim()
+        };
+      }
+      saveEntries();
+      showToast('Entry updated');
+      exitEditMode();
+    } else {
+      const entry = {
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2,7),
+        date: dateInput.value || todayStr(),
+        category: category,
+        hours: selectedTime,
+        comment: commentInput.value.trim(),
+        createdAt: Date.now()
+      };
+      entries.push(entry);
+      saveEntries();
+      showToast('Entry added');
+      resetForm();
+    }
+
+    renderTally();
+    renderLog();
+    renderDashboard();
+  });
+
+  cancelEditBtn.addEventListener('click', () => {
+    exitEditMode();
+  });
+
+  function resetForm(){
+    selectedCategory = null;
+    selectedTime = null;
+    customTimeActive = false;
+    [...categoryGrid.children].forEach(c => c.classList.remove('active'));
+    [...timeGrid.querySelectorAll('.time-tile')].forEach(t => t.classList.remove('active'));
+    customTime.value = '';
+    customTime.classList.remove('active-custom');
+    otherInput.classList.remove('show');
+    otherInput.value = '';
+    commentInput.value = '';
+  }
+
+  function editEntry(id){
+    const entry = entries.find(e => e.id === id);
+    if(!entry) return;
+    editingId = id;
+    resetForm();
+
+    dateInput.value = entry.date;
+
+    if(CATEGORIES.includes(entry.category)){
+      selectedCategory = entry.category;
+      const tile = [...categoryGrid.children].find(c => c.dataset.cat === entry.category);
+      if(tile) tile.classList.add('active');
+    } else {
+      selectedCategory = 'Other';
+      const tile = [...categoryGrid.children].find(c => c.dataset.cat === 'Other');
+      if(tile) tile.classList.add('active');
+      otherInput.classList.add('show');
+      otherInput.value = entry.category;
+    }
+
+    const presetTile = [...timeGrid.querySelectorAll('.time-tile')].find(t => parseFloat(t.dataset.time) === entry.hours);
+    if(presetTile){
+      selectedTime = entry.hours;
+      presetTile.classList.add('active');
+    } else {
+      selectedTime = entry.hours;
+      customTime.value = entry.hours;
+      customTimeActive = true;
+      customTime.classList.add('active-custom');
+    }
+
+    commentInput.value = entry.comment || '';
+
+    addBtn.textContent = 'Save changes';
+    cancelEditBtn.classList.add('show');
+    editingBanner.classList.add('show');
+    errorMsg.classList.remove('show');
+    renderTally();
+
+    document.querySelector('.card h2').scrollIntoView({ behavior:'smooth', block:'start' });
+  }
+
+  function exitEditMode(){
+    editingId = null;
+    resetForm();
+    addBtn.textContent = 'Add to log';
+    cancelEditBtn.classList.remove('show');
+    editingBanner.classList.remove('show');
+    renderTally();
+  }
+
+  function deleteEntry(id){
+    if(editingId === id) exitEditMode();
+    entries = entries.filter(e => e.id !== id);
+    saveEntries();
+    renderTally();
+    renderLog();
+    renderDashboard();
+  }
+
+  // --- tally / plate meter ---
+  function renderTally(){
+    const d = dateInput.value || todayStr();
+    tallyDateLabel.textContent = (d === todayStr()) ? 'Today · ' + fmtDateHeading(d) : fmtDateHeading(d);
+    const dayEntries = entries.filter(e => e.date === d);
+    const total = dayEntries.reduce((s,e) => s + e.hours, 0);
+    tallyNumber.innerHTML = total.toFixed(2).replace(/\.00$/,'.0') + '<span>hrs logged</span>';
+
+    plateTrack.innerHTML = '';
+    const filledSegs = Math.round((total / DAILY_TARGET) * SEGMENTS);
+    for(let i=0;i<SEGMENTS;i++){
+      const seg = document.createElement('div');
+      seg.className = 'plate-seg';
+      if(i < filledSegs){
+        seg.classList.add(filledSegs > SEGMENTS ? 'over' : 'filled');
+      }
+      plateTrack.appendChild(seg);
+    }
+
+    const byCat = {};
+    dayEntries.forEach(e => { byCat[e.category] = (byCat[e.category]||0) + e.hours; });
+    breakdown.innerHTML = '';
+    Object.keys(byCat).sort((a,b)=>byCat[b]-byCat[a]).forEach(cat => {
+      const chip = document.createElement('div');
+      chip.className = 'chip';
+      chip.innerHTML = cat + ' <b>' + byCat[cat].toFixed(2).replace(/\.00$/,'') + 'h</b>';
+      breakdown.appendChild(chip);
+    });
+    if(dayEntries.length === 0){
+      breakdown.innerHTML = '<div class="chip" style="opacity:.6">No entries for this date yet</div>';
+    }
+  }
+
+  // --- log list (all days, most recent first) ---
+  function renderLog(){
+    logCount.textContent = entries.length + ' total';
+    if(entries.length === 0){
+      logList.innerHTML = '<div class="empty-state">No entries yet. Add your first one above.</div>';
+      return;
+    }
+    const byDate = {};
+    entries.forEach(e => {
+      if(!byDate[e.date]) byDate[e.date] = [];
+      byDate[e.date].push(e);
+    });
+    const dates = Object.keys(byDate).sort((a,b) => b.localeCompare(a));
+    logList.innerHTML = '';
+    dates.forEach(d => {
+      const dayEntries = byDate[d].sort((a,b) => b.createdAt - a.createdAt);
+      const dayTotal = dayEntries.reduce((s,e)=>s+e.hours,0);
+      const group = document.createElement('div');
+      group.className = 'day-group';
+      const heading = document.createElement('div');
+      heading.className = 'day-heading';
+      heading.innerHTML = '<span>' + fmtDateHeading(d) + '</span><b>' + dayTotal.toFixed(2).replace(/\.00$/,'') + 'h</b>';
+      group.appendChild(heading);
+      dayEntries.forEach(e => {
+        const row = document.createElement('div');
+        row.className = 'entry' + (e.id === editingId ? ' editing' : '');
+        row.innerHTML =
+          '<div class="entry-time">' + e.hours.toFixed(2).replace(/\.00$/,'') + 'h</div>' +
+          '<div class="entry-body"><div class="entry-cat">' + escapeHtml(e.category) + '</div>' +
+          (e.comment ? '<div class="entry-comment">' + escapeHtml(e.comment) + '</div>' : '') +
+          '</div>' +
+          '<div class="entry-actions">' +
+          '<button class="entry-edit" title="Edit entry" data-id="' + e.id + '">✎</button>' +
+          '<button class="entry-del" title="Delete entry" data-id="' + e.id + '">✕</button>' +
+          '</div>';
+        group.appendChild(row);
+      });
+      logList.appendChild(group);
+    });
+    [...logList.querySelectorAll('.entry-del')].forEach(btn => {
+      btn.addEventListener('click', () => deleteEntry(btn.dataset.id));
+    });
+    [...logList.querySelectorAll('.entry-edit')].forEach(btn => {
+      btn.addEventListener('click', () => editEntry(btn.dataset.id));
+    });
+  }
+
+  // --- dashboard: weekly (16h target) & monthly (0.4 FTE) tracking ---
+  function renderDashboard(){
+    const today = todayStr();
+    const wk = weekRange(today);
+    const weekTotal = entries.filter(e => e.date >= wk.start && e.date <= wk.end)
+                              .reduce((s,e) => s + e.hours, 0);
+    const weekPct = Math.min(100, Math.round((weekTotal / WEEKLY_TARGET) * 100));
+    weekMetric.innerHTML = weekTotal.toFixed(2).replace(/\.00$/,'.0') + '<span>/ ' + WEEKLY_TARGET + 'h</span>';
+    weekBar.style.width = weekPct + '%';
+    weekBar.classList.toggle('over', weekTotal > WEEKLY_TARGET);
+    weekSub.textContent = fmtShort(wk.start) + ' – ' + fmtShort(wk.end) + ' · ' + weekPct + '%';
+
+    const curMonthKey = today.slice(0,7);
+    const monthTotal = entries.filter(e => monthKey(e.date) === curMonthKey)
+                               .reduce((s,e) => s + e.hours, 0);
+    const monthPct = Math.min(100, Math.round((monthTotal / MONTHLY_TARGET) * 100));
+    monthMetric.innerHTML = monthTotal.toFixed(2).replace(/\.00$/,'.0') + '<span>/ ' + MONTHLY_TARGET + 'h</span>';
+    monthBar.style.width = monthPct + '%';
+    monthBar.classList.toggle('over', monthTotal > MONTHLY_TARGET);
+    monthSub.textContent = '0.4 FTE target · ' + monthPct + '%';
+
+    // history: last 4 weeks + last 3 months (excluding current, already shown above)
+    let html = '';
+    html += '<div class="metric-label" style="margin-bottom:10px;">Recent weeks</div>';
+    for(let i = 1; i <= 4; i++){
+      const wkStart = addDays(wk.start, -7*i);
+      const wkEnd = addDays(wkStart, 6);
+      const total = entries.filter(e => e.date >= wkStart && e.date <= wkEnd).reduce((s,e)=>s+e.hours,0);
+      const pct = Math.min(100, Math.round((total / WEEKLY_TARGET) * 100));
+      html += '<div class="history-row"><div class="hr-label">' + fmtShort(wkStart) + '–' + fmtShort(wkEnd) + '</div>' +
+              '<div class="hr-track"><div class="hr-fill' + (total > WEEKLY_TARGET ? ' over' : '') + '" style="width:' + pct + '%"></div></div>' +
+              '<div class="hr-val">' + total.toFixed(1) + 'h</div></div>';
+    }
+    html += '<div class="metric-label" style="margin:16px 0 10px;">Recent months</div>';
+    for(let i = 1; i <= 3; i++){
+      const d = new Date(curMonthKey + '-01T00:00:00');
+      d.setMonth(d.getMonth() - i);
+      const key = d.toISOString().slice(0,7);
+      const total = entries.filter(e => monthKey(e.date) === key).reduce((s,e)=>s+e.hours,0);
+      const pct = Math.min(100, Math.round((total / MONTHLY_TARGET) * 100));
+      html += '<div class="history-row"><div class="hr-label">' + fmtMonth(key) + '</div>' +
+              '<div class="hr-track"><div class="hr-fill' + (total > MONTHLY_TARGET ? ' over' : '') + '" style="width:' + pct + '%"></div></div>' +
+              '<div class="hr-val">' + total.toFixed(1) + 'h</div></div>';
+    }
+    dashboardHistory.innerHTML = html;
+  }
+
+  function escapeHtml(str){
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  // --- export ---
+  exportBtn.addEventListener('click', () => {
+    if(entries.length === 0){
+      showToast('No entries to export yet');
+      return;
+    }
+    try{
+      const sorted = [...entries].sort((a,b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt);
+      const logRows = sorted.map(e => ({
+        Date: e.date,
+        Category: e.category,
+        'Hours': e.hours,
+        Comment: e.comment
+      }));
+
+      const byDate = {};
+      sorted.forEach(e => { byDate[e.date] = (byDate[e.date]||0) + e.hours; });
+      const summaryRows = Object.keys(byDate).sort().map(d => ({
+        Date: d,
+        'Total Hours': Math.round(byDate[d]*100)/100
+      }));
+      const grandTotal = Math.round(sorted.reduce((s,e)=>s+e.hours,0)*100)/100;
+      summaryRows.push({ Date: 'TOTAL', 'Total Hours': grandTotal });
+
+      const wb = XLSX.utils.book_new();
+      const wsLog = XLSX.utils.json_to_sheet(logRows);
+      wsLog['!cols'] = [{wch:12},{wch:20},{wch:10},{wch:45}];
+      XLSX.utils.book_append_sheet(wb, wsLog, 'Entries');
+
+      const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
+      wsSummary['!cols'] = [{wch:12},{wch:14}];
+      XLSX.utils.book_append_sheet(wb, wsSummary, 'Daily Totals');
+
+      const filename = 'load-log-' + todayStr() + '.xlsx';
+      XLSX.writeFile(wb, filename);
+      showToast('Exported ' + filename);
+    }catch(e){
+      showToast('Export failed — try again');
+    }
+  });
+
+  loadEntries();
+
+  // --- PWA: service worker + install prompt ---
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('service-worker.js').catch(() => {
+        // Offline caching just won't be available; the app still works online.
+      });
+    });
+  }
+
+  let deferredInstallPrompt = null;
+  const installBtn = document.getElementById('installBtn');
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    installBtn.style.display = 'block';
+  });
+  installBtn.addEventListener('click', async () => {
+    if(!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    installBtn.style.display = 'none';
+  });
+  window.addEventListener('appinstalled', () => {
+    installBtn.style.display = 'none';
+  });
+})();
+</script>
+</body>
+</html>
